@@ -7,6 +7,7 @@
 // exist yet, this command deploys first and applies the migrations right after. In that case the new Worker runs
 // without tables for a few seconds, which is harmless because nobody uses it yet. With --require-existing-databases,
 // a missing database is an error instead, so that `wrangler deploy` never creates a new, empty one.
+// With --keep-vars, `wrangler deploy` gets --keep-vars, so that the variables set in the dashboard are kept.
 //
 // On later deploys the migrations are applied before `wrangler deploy`, so that new code never runs against missing
 // tables.
@@ -27,9 +28,13 @@
 // Every side effect is injected, so that this module can be imported and tested without wrangler.
 import path from "node:path";
 
-export const USAGE = "Usage: workers-deploy [--require-existing-databases]";
+export const USAGE = "Usage: workers-deploy [--require-existing-databases] [--keep-vars]";
 
 const HELP = `${USAGE}
+
+Flags:
+  --require-existing-databases  Fail without deploying anything when a D1 database does not exist.
+  --keep-vars                   Pass --keep-vars to wrangler deploy, keeping the variables set in the dashboard.
 
 Environment variables:
   LOCATION_HINT   Location of the D1 databases and R2 buckets to create: weur, eeur, apac, oc, wnam or enam.
@@ -37,6 +42,7 @@ Environment variables:
 `;
 
 const REQUIRE_EXISTING_DATABASES = "--require-existing-databases";
+const KEEP_VARS = "--keep-vars";
 const LOCATIONS = ["weur", "eeur", "apac", "oc", "wnam", "enam"];
 const MISSING_DATABASE = /Couldn't find (a|an auto-provisioned) D1 DB/;
 const MISSING_BUCKET = "[code: 10006]";
@@ -60,21 +66,24 @@ function output(result) {
 /**
  * Parses the command line arguments.
  * @param {string[]} argv
- * @returns {{ help: true } | { help: false, requireExistingDatabases: boolean } | { error: string }}
+ * @returns {{ help: true } | { help: false, requireExistingDatabases: boolean, keepVars: boolean } | { error: string }}
  */
 export function parseArgs(argv) {
   if (argv.includes("--help") || argv.includes("-h")) {
     return { help: true };
   }
   let requireExistingDatabases = false;
+  let keepVars = false;
   for (const arg of argv) {
     if (arg === REQUIRE_EXISTING_DATABASES) {
       requireExistingDatabases = true;
+    } else if (arg === KEEP_VARS) {
+      keepVars = true;
     } else {
       return { error: `Unknown argument "${arg}". ${USAGE}` };
     }
   }
-  return { help: false, requireExistingDatabases };
+  return { help: false, requireExistingDatabases, keepVars };
 }
 
 /**
@@ -298,11 +307,10 @@ async function deploy({ argv, env, readConfig, wrangler, exists, cwd, log, warn,
   function deployWorker() {
     if (domains.length === 0) {
       log("Deploying the Worker. CUSTOM_DOMAINS is not set: no Custom Domains are passed to wrangler deploy.");
-      run(["deploy"]);
-      return;
+    } else {
+      log(`Deploying the Worker with the Custom Domains ${domains.join(", ")}.`);
     }
-    log(`Deploying the Worker with the Custom Domains ${domains.join(", ")}.`);
-    run(["deploy", ...domains.flatMap((domain) => ["--domains", domain])]);
+    run(["deploy", ...domains.flatMap((domain) => ["--domains", domain]), ...(args.keepVars ? [KEEP_VARS] : [])]);
   }
 
   const missing = migrated.filter((db) => !databaseExists.get(db.binding));

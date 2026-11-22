@@ -513,7 +513,7 @@ describe("arguments (18, 27)", () => {
       assert.equal(r.code, 1);
       assert.deepEqual(r.calls, []);
       assert.equal(r.readConfigCalls(), 0);
-      assert.deepEqual(r.errors, [`Unknown argument "${arg}". Usage: workers-deploy [--require-existing-databases]`]);
+      assert.deepEqual(r.errors, [`Unknown argument "${arg}". Usage: workers-deploy [--require-existing-databases] [--keep-vars]`]);
     });
   }
 
@@ -527,7 +527,7 @@ describe("arguments (18, 27)", () => {
       assert.equal(r.code, 0);
       assert.deepEqual(r.calls, []);
       assert.equal(r.readConfigCalls(), 0);
-      assert.match(r.stdout, /^Usage: workers-deploy \[--require-existing-databases\]\n/);
+      assert.match(r.stdout, /^Usage: workers-deploy \[--require-existing-databases\] \[--keep-vars\]\n/);
       assert.match(r.stdout, /LOCATION_HINT/);
       assert.match(r.stdout, /CUSTOM_DOMAINS/);
       assert.deepEqual(r.errors, []);
@@ -543,6 +543,123 @@ describe("arguments (18, 27)", () => {
     assert.equal(r.code, 1);
     assert.deepEqual(r.commands, ["d1 info DB"]);
     assert.equal(r.errors.length, 1);
+  });
+});
+
+describe("--keep-vars", () => {
+  const argv = ["--keep-vars"];
+
+  it("passes --keep-vars to deploy only", async () => {
+    const r = await runMain({ argv, config: configWith({ d1_databases: [db()] }) });
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.commands, ["d1 info DB", MIGRATE, "deploy --keep-vars"]);
+  });
+
+  for (const flags of [
+    ["--require-existing-databases", "--keep-vars"],
+    ["--keep-vars", "--require-existing-databases"],
+  ]) {
+    it(`applies both flags for ${flags.join(" ")}`, async () => {
+      const ok = await runMain({ argv: flags, config: configWith({ d1_databases: [db()] }) });
+      assert.equal(ok.code, 0);
+      assert.deepEqual(ok.commands, ["d1 info DB", MIGRATE, "deploy --keep-vars"]);
+
+      const missing = await runMain({
+        argv: flags,
+        config: configWith({ d1_databases: [db()] }),
+        respond: respondTo([["d1 info", MISSING_D1]]),
+      });
+      assert.equal(missing.code, 1);
+      assert.deepEqual(missing.commands, ["d1 info DB"]);
+      assert.equal(missing.errors.length, 1);
+    });
+  }
+
+  it("adds --keep-vars after the Custom Domains", async () => {
+    const r = await runMain({
+      argv,
+      env: { CUSTOM_DOMAINS: "a.example.com,b.example.com" },
+      config: configWith({}),
+    });
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.commands, ["deploy --domains a.example.com --domains b.example.com --keep-vars"]);
+    assert.ok(r.logs.includes("Deploying the Worker with the Custom Domains a.example.com, b.example.com."));
+  });
+
+  it("passes --keep-vars when deploying first", async () => {
+    const r = await runMain({
+      argv,
+      config: configWith({ d1_databases: [db()] }),
+      respond: respondTo([["d1 info", MISSING_D1]]),
+    });
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.commands, ["d1 info DB", "deploy --keep-vars", MIGRATE]);
+  });
+
+  it("does not pass --keep-vars to d1 create or r2 bucket commands", async () => {
+    let infos = 0;
+    const r = await runMain({
+      argv,
+      env: { LOCATION_HINT: "apac" },
+      config: configWith({ d1_databases: [db()], r2_buckets: [{ binding: "A", bucket_name: "a" }] }),
+      respond: respondTo([
+        ["d1 info", MISSING_D1],
+        [
+          "r2 bucket info",
+          () => {
+            infos += 1;
+            return infos === 1 ? MISSING_R2 : { status: 0, stdout: "location: apac\n", stderr: "" };
+          },
+        ],
+      ]),
+    });
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.commands, [
+      "d1 info DB",
+      "d1 create app --location apac --no-update-config",
+      "r2 bucket info a",
+      "r2 bucket create a --location apac --no-update-config",
+      "r2 bucket info a",
+      MIGRATE,
+      "deploy --keep-vars",
+    ]);
+  });
+
+  it("returns the status of a failed deploy with --keep-vars", async () => {
+    const r = await runMain({
+      argv,
+      config: configWith({ d1_databases: [db()] }),
+      respond: respondTo([["deploy", { status: 3 }]]),
+    });
+    assert.equal(r.code, 3);
+    assert.deepEqual(r.commands, ["d1 info DB", MIGRATE, "deploy --keep-vars"]);
+  });
+
+  for (const arg of ["--keep-vars=true", "--keep-var"]) {
+    it(`rejects ${arg}`, async () => {
+      const r = await runMain({ argv: [arg], config: configWith({ d1_databases: [db()] }) });
+      assert.equal(r.code, 1);
+      assert.deepEqual(r.calls, []);
+      assert.equal(r.readConfigCalls(), 0);
+      assert.deepEqual(r.errors, [
+        `Unknown argument "${arg}". Usage: workers-deploy [--require-existing-databases] [--keep-vars]`,
+      ]);
+    });
+  }
+
+  it("passes --keep-vars once when repeated", async () => {
+    const r = await runMain({ argv: ["--keep-vars", "--keep-vars"], config: configWith({ d1_databases: [db()] }) });
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.commands, ["d1 info DB", MIGRATE, "deploy --keep-vars"]);
+  });
+
+  it("prints the help for --help --keep-vars", async () => {
+    const r = await runMain({ argv: ["--help", "--keep-vars"], config: configWith({ d1_databases: [db()] }) });
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.calls, []);
+    assert.equal(r.readConfigCalls(), 0);
+    assert.match(r.stdout, /^Usage: workers-deploy \[--require-existing-databases\] \[--keep-vars\]\n/);
+    assert.match(r.stdout, /--keep-vars {19}Pass --keep-vars to wrangler deploy/);
   });
 });
 

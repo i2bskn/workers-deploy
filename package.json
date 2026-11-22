@@ -1,6 +1,6 @@
 {
   "name": "@i2bskn/workers-deploy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Deploy command for Cloudflare Workers with D1: creates resources in LOCATION_HINT, applies migrations, then deploys.",
   "license": "MIT",
   "repository": {

@@ -33,7 +33,7 @@ Run it from the root of the project. The bindings are read from the Wrangler con
 extends with `node_modules/.bin`.
 
 ```
-Usage: workers-deploy [--require-existing-databases]
+Usage: workers-deploy [--require-existing-databases] [--keep-vars]
 ```
 
 ## Environment variables
@@ -51,6 +51,7 @@ In Workers Builds, set them as build variables.
 | flag | effect |
 | --- | --- |
 | `--require-existing-databases` | Stops with an error, before creating or deploying anything, when a D1 database of the configuration does not exist. Without it, `wrangler deploy` would create a new, empty database. A D1 binding without both `database_name` and `database_id` counts as missing. R2 buckets are still created as usual. |
+| `--keep-vars` | Passes `--keep-vars` to `wrangler deploy`, so that the variables set in the dashboard are kept. It is not passed to the other wrangler commands. |
 | `--help`, `-h` | Prints the usage. |
 
 Any other argument is an error.
@@ -74,7 +75,8 @@ Any other argument is an error.
    deploys, so that new code never runs against missing tables. If any of them is missing, deploys first so that
    `wrangler deploy` creates it, and then applies the migrations. In that case the new Worker runs without tables for a
    few seconds, which is harmless on a first deploy.
-8. Deploys with `wrangler deploy`, adding `--domains <hostname>` for each hostname of `CUSTOM_DOMAINS`.
+8. Deploys with `wrangler deploy`, adding `--domains <hostname>` for each hostname of `CUSTOM_DOMAINS`, and
+   `--keep-vars` at the end when `--keep-vars` is given.
 
 Existing databases and buckets are never moved: their location cannot be changed.
 

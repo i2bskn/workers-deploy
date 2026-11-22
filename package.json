@@ -1,0 +1,38 @@
+{
+  "name": "@i2bskn/workers-deploy",
+  "version": "0.1.0",
+  "description": "Deploy command for Cloudflare Workers with D1: creates resources in LOCATION_HINT, applies migrations, then deploys.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/i2bskn/workers-deploy.git"
+  },
+  "type": "module",
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "workers-deploy": "./bin/workers-deploy.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "prepublishOnly": "pnpm run test"
+  },
+  "peerDependencies": {
+    "wrangler": ">=4.154.0 <5"
+  },
+  "devDependencies": {
+    "wrangler": "4.154.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  }
+}
